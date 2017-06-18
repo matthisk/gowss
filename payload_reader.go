@@ -1,49 +1,35 @@
 package websocket
 
-// type PayloadReader struct {
-// 	c      *Conn
-// 	header FrameHeader
-// }
+import (
+	"io"
+)
 
-// // The message types are defined in RFC 6455, section 11.8.
-// const (
-// 	// TextMessage denotes a text data message. The text message payload is
-// 	// interpreted as UTF-8 encoded text data.
-// 	TextMessage = 1
+// PayloadReader read the remaining bytes from a websocket frame
+type PayloadReader struct {
+	reader        io.Reader
+	header        FrameHeader
+	readRemaining int
+}
 
-// 	// BinaryMessage denotes a binary data message.
-// 	BinaryMessage = 2
+// NewPayloadReader returns a payload reader struct
+func NewPayloadReader(reader io.Reader, header FrameHeader) PayloadReader {
+	if header.mask {
+		reader = NewMaskedReader(reader, header.maskBytes)
+	}
 
-// 	// CloseMessage denotes a close control message. The optional message
-// 	// payload contains a numeric code and text. Use the FormatCloseMessage
-// 	// function to format a close message payload.
-// 	CloseMessage = 8
+	return PayloadReader{reader, header, header.payloadLength}
+}
 
-// 	// PingMessage denotes a ping control message. The optional message payload
-// 	// is UTF-8 encoded text.
-// 	PingMessage = 9
+func (r *PayloadReader) Read(b []byte) (n int, err error) {
+	if len(b) > r.readRemaining {
+		b = b[:r.readRemaining]
 
-// 	// PongMessage denotes a ping control message. The optional message payload
-// 	// is UTF-8 encoded text.
-// 	PongMessage = 10
-// )
+		n, err := r.reader.Read(b)
 
-// func (r *PayloadReader) ReadTextMessage() (result string, err error) {
-// 	reader := r.c.br
-// 	remaining := r.header.
+		r.readRemaining -= n
 
-// 	for remaining > 0 {
-// 		rn, size, err := reader.ReadRune()
-// 		remaining -= size
-// 		result = result + rn
-// 	}
+		return n, err
+	}
 
-// 	return result, err
-// }
-
-// func (r *PayloadReader) Read(b []byte) (n int, err error) {
-// 	switch r.header.frameType {
-// 	case TextMessage:
-// 		c.Read(r.header.payloadLength)
-// 	}
-// }
+	return 0, io.EOF
+}
