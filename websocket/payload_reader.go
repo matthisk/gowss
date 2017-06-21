@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -14,6 +15,7 @@ type PayloadReader struct {
 // NewPayloadReader returns a payload reader struct
 func NewPayloadReader(reader io.Reader, header FrameHeader) PayloadReader {
 	if header.mask {
+		fmt.Println("Using mask bytes", header.maskBytes)
 		reader = NewMaskedReader(reader, header.maskBytes)
 	}
 
@@ -21,6 +23,10 @@ func NewPayloadReader(reader io.Reader, header FrameHeader) PayloadReader {
 }
 
 func (r *PayloadReader) Read(b []byte) (n int, err error) {
+	if r.readRemaining == 0 {
+		return 0, io.EOF
+	}
+
 	if len(b) > r.readRemaining {
 		b = b[:r.readRemaining]
 
@@ -31,5 +37,5 @@ func (r *PayloadReader) Read(b []byte) (n int, err error) {
 		return n, err
 	}
 
-	return 0, io.EOF
+	return 0, io.ErrUnexpectedEOF
 }

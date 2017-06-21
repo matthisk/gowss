@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 )
+
+var ILLEGAL_OPCODE_ERR = errors.New("Expected opcode equal to TextMessage or BinaryMessage")
 
 // The message types are defined in RFC 6455, section 11.8.
 const (
@@ -37,19 +40,30 @@ type Conn struct {
 	conn net.Conn
 
 	// Writing
-	bw *bufio.Writer
+	mask [4]byte
+	bw   *bufio.Writer
 
 	// Reading
 	br *bufio.Reader
 }
 
-// FrameHeader struct that captures a Websocket frame
-type FrameHeader struct {
-	final         bool
-	opcode        byte
-	mask          bool
-	maskBytes     [4]byte
-	payloadLength int
+// NewConn return a new websocket connection from a net.Conn
+func NewConn(conn net.Conn) (c Conn, err error) {
+	var mask [4]byte
+	maskSlice := make([]byte, 4)
+	n, err := rand.Read(maskSlice)
+
+	copy(mask[:], maskSlice[0:4])
+
+	if err != nil {
+		return c, err
+	}
+
+	if n != 4 {
+		return c, errors.New("Expected 4 random bytes for the mask")
+	}
+
+	return Conn{conn, mask, bufio.NewWriter(conn), bufio.NewReader(conn)}, nil
 }
 
 // Bit masks used to parse control bits from frame header
@@ -71,15 +85,15 @@ const (
 	payloadLengthMask = 0x7f
 )
 
-func (c *Conn) Read(l int) ([]byte, error) {
-	result, err := c.br.Peek(l)
+func (conn *Conn) Read(l int) ([]byte, error) {
+	result, err := conn.br.Peek(l)
 
 	if err != nil {
 		fmt.Println("Error while peeking read buffer", err)
 		return result, err
 	}
 
-	_, err = c.br.Discard(l)
+	_, err = conn.br.Discard(l)
 
 	if err != nil {
 		fmt.Println("Error while discarding read buffer", err)
@@ -198,14 +212,47 @@ func (conn *Conn) NextReader() (opcode byte, r *PayloadReader, err error) {
 }
 
 // ReadMessage read all bytes in payload using ioutil.ReadAll
-func (conn *Conn) ReadMessage() (message []byte, err error) {
-	_, reader, err := conn.NextReader()
+func (conn *Conn) ReadMessage() (opcode byte, message []byte, err error) {
+	opcode, reader, err := conn.NextReader()
 
 	if err != nil {
-		return message, err
+		return 0, message, err
 	}
 
 	message, err = ioutil.ReadAll(reader)
 
-	return message, err
+	return opcode, message, err
+}
+
+// WriteMessage write all bytes in payload to writer
+func (conn *Conn) WriteMessage(opcode byte, b []byte) (n int, err error) {
+	if opcode != TextMessage && opcode != BinaryMessage {
+		return 0, ILLEGAL_OPCODE_ERR
+	}
+
+	fh := NewFrameHeader(false, opcode, true, conn.mask, len(b))
+
+	// The masked writer should write directly on the conn and
+	//not on the buffered writer, because we have no way to flush it
+	maskedWriter := NewMaskedWriter(conn.conn, fh.maskBytes)
+
+	n, err = conn.bw.Write(fh.toByteSlice())
+
+	if err != nil {
+		return n, err
+	}
+
+	err = conn.bw.Flush()
+
+	if err != nil {
+		return n, err
+	}
+
+	n, err = maskedWriter.Write(b)
+
+	if err != nil {
+		return n, err
+	}
+
+	return n, nil
 }

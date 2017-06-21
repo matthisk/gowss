@@ -1,6 +1,8 @@
 package websocket
 
-import "io"
+import (
+	"io"
+)
 
 // MaskedReader can read from an io.Reader and unmask the bytes in
 // this reader using MaskedReader.mask
@@ -19,15 +21,16 @@ func NewMaskedReader(reader io.Reader, mask [4]byte) *MaskedReader {
 func unmask(offset int, mask [4]byte, bytes []byte) {
 	for i, b := range bytes {
 		m := mask[(offset+i)%4]
-		bytes[i] = m ^ b
+		bytes[i] = b ^ m
 	}
 }
 
 func (r *MaskedReader) Read(b []byte) (n int, err error) {
 	n, err = r.rd.Read(b)
-	r.offset += n
 
 	unmask(r.offset, r.mask, b)
+
+	r.offset += n
 
 	return n, err
 }

@@ -18,7 +18,8 @@ Sec-WebSocket-Version: 13
 
 `
 
-func client() {
+// RunClient
+func RunClient() {
 	fmt.Println("Connecting to localhost:8080 ws server")
 
 	conn, err := net.Dial("tcp", "localhost:8080")
@@ -49,15 +50,23 @@ func client() {
 
 	fmt.Println(response)
 
-	payload := []byte{0xf, 0x82, 0x1, 0x1, 0x1, 0x1, 0xff, 0xff}
+	wConn, err := NewConn(conn)
 
-	writer.Write(payload)
-
-	time.Sleep(time.Duration(1) * time.Second)
-
-	writer.Flush()
+	if err != nil {
+		fmt.Println("Failed to create websocket connection in client", err)
+		return
+	}
 
 	for true {
+		msg := []byte("Hello Websocket World!")
 
+		_, err = wConn.WriteMessage(TextMessage, msg)
+
+		if err != nil {
+			fmt.Println("Failed to write message to websocket", err)
+			return
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 }
