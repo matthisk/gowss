@@ -23,6 +23,7 @@ func mask(offset int, mask [4]byte, bytes []byte) {
 	}
 }
 
+// Writer mask input bytes and write to the underlying writer
 func (wr *MaskedWriter) Write(b []byte) (n int, err error) {
 	mask(wr.offset, wr.mask, b)
 

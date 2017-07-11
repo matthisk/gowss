@@ -34,11 +34,11 @@ type FrameHeader struct {
 
 	mask          bool
 	maskBytes     [4]byte
-	payloadLength int
+	payloadLength int64
 }
 
 // NewFrameHeader can be used to construct a frame header where rsv control bits are set to 0
-func NewFrameHeader(final bool, opcode byte, mask bool, maskBytes [4]byte, payloadLength int) FrameHeader {
+func NewFrameHeader(final bool, opcode byte, mask bool, maskBytes [4]byte, payloadLength int64) FrameHeader {
 	return FrameHeader{final, opcode, false, false, false, mask, maskBytes, payloadLength}
 }
 
